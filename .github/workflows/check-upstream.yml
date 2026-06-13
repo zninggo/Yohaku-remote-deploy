@@ -8,7 +8,7 @@ on:
 
 env:
   UPSTREAM_REPO: innei-dev/yohaku
-  UPSTREAM_BRANCH: refactor/remix
+  UPSTREAM_BRANCH: main
   HASH_FILE: build_hash.remix
 
 jobs:
