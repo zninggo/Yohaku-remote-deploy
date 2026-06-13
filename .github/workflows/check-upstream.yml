@@ -8,8 +8,8 @@ on:
 
 env:
   UPSTREAM_REPO: innei-dev/yohaku
-  UPSTREAM_BRANCH: main
-  HASH_FILE: build_hash.main
+  UPSTREAM_BRANCH: refactor/remix
+  HASH_FILE: build_hash.remix
 
 jobs:
   check:
@@ -71,6 +71,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           echo "Triggering build with upstream SHA: ${{ needs.check.outputs.sha_short }}"
-          gh workflow run deploy-main.yml \
+          gh workflow run deploy-remix.yml \
             --repo ${{ github.repository }} \
             -f force_build=true
