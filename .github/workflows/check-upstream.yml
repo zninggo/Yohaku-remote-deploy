@@ -1,0 +1,76 @@
+name: Check Upstream & Rebuild
+
+on:
+  schedule:
+    # 每小时检查一次（UTC）
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+env:
+  UPSTREAM_REPO: innei-dev/yohaku
+  UPSTREAM_BRANCH: main
+  HASH_FILE: build_hash.main
+
+jobs:
+  check:
+    name: Check for Upstream Changes
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+      sha_short: ${{ steps.compare.outputs.sha_short }}
+      sha_full: ${{ steps.compare.outputs.sha_full }}
+
+    steps:
+      - name: Checkout deploy repo
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Read current hash
+        id: current
+        run: echo "hash=$(cat ${{ env.HASH_FILE }} 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch upstream latest SHA
+        id: upstream
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          sha=$(gh api repos/${{ env.UPSTREAM_REPO }}/commits/${{ env.UPSTREAM_BRANCH }} --jq '.sha')
+          short=$(echo "$sha" | cut -c1-8)
+          echo "sha_full=$sha" >> "$GITHUB_OUTPUT"
+          echo "sha_short=$short" >> "$GITHUB_OUTPUT"
+
+      - name: Compare
+        id: compare
+        env:
+          CURRENT: ${{ steps.current.outputs.hash }}
+          LATEST_SHORT: ${{ steps.upstream.outputs.sha_short }}
+          LATEST_FULL: ${{ steps.upstream.outputs.sha_full }}
+        run: |
+          echo "Current: $CURRENT"
+          echo "Latest:  $LATEST_SHORT"
+          if [ "$CURRENT" = "$LATEST_SHORT" ]; then
+            echo "No changes. Skipping."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Upstream updated! $CURRENT → $LATEST_SHORT"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "sha_short=$LATEST_SHORT" >> "$GITHUB_OUTPUT"
+            echo "sha_full=$LATEST_FULL" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Trigger Build
+    runs-on: ubuntu-latest
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+
+    steps:
+      - name: Trigger deploy-main workflow
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          echo "Triggering build with upstream SHA: ${{ needs.check.outputs.sha_short }}"
+          gh workflow run deploy-main.yml \
+            --repo ${{ github.repository }} \
+            -f force_build=true
